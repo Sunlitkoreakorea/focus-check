@@ -2,8 +2,9 @@
 
 노트북 서버 버전(`../probe_app`)과 화면, 흐름, 측정은 같습니다. 다른 점은 **고정 주소(https)로 열리고, 기록이 Firebase에 저장되며, 노트북이 필요 없다**는 것입니다. 무료(Firebase Spark 요금제, GitHub Pages)로 됩니다.
 
-- 참가자 페이지: `https://<깃허브아이디>.github.io/<저장소>/?k=<개인 토큰>`
-- 연구자 화면: `https://<깃허브아이디>.github.io/<저장소>/admin.html` (구글 로그인, 등록된 이메일만)
+- 참가자 페이지: `https://sunlitkoreakorea.github.io/focus-check/?k=<개인 토큰>`
+- 연구자 화면: `https://sunlitkoreakorea.github.io/focus-check/admin.html` (구글 로그인, 등록된 이메일만)
+- 저장소: https://github.com/Sunlitkoreakorea/focus-check (공개). Firebase 승인된 도메인에 `sunlitkoreakorea.github.io` 를 추가해야 연구자 로그인이 됩니다.
 - 플레이리스트 캡처는 앱에 올리지 않고 **연구자에게 카톡으로** 받습니다. 앱에는 "보냈어요 / 끝나고 보낼게요"만 기록합니다.
 
 ## 파일
