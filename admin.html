@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>집중 체크 연구자 화면</title>
+<style>
+  :root { --bg: #fafaf8; --fg: #1b1b1b; --line: #ddd; --ok: #e3f2e6; --part: #fff4d6; --accent: #1f5fbf; --warn: #b3261e; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { font-family: "Malgun Gothic", -apple-system, sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 10px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.danger { color: var(--warn); }
+  input[type=number] { width: 80px; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: #fff; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; vertical-align: middle; }
+  td.done { background: var(--ok); }
+  td.link { text-align: left; font-size: 12px; word-break: break-all; }
+  .qr img, .qr canvas { width: 72px; height: 72px; }
+  .msg { font-size: 14px; color: #555; margin-top: 6px; }
+  .msg.err { color: var(--warn); }
+  small { color: #666; }
+  @media print { .noprint { display: none; } }
+</style>
+</head>
+<body>
+<h1>집중 체크 연구자 화면</h1>
+
+<div class="card" id="c-login">
+  <div class="row">
+    <button class="primary" id="b-login">구글로 로그인</button>
+    <button id="b-logout" hidden>로그아웃</button>
+    <span id="who"></span>
+  </div>
+  <p class="msg" id="login-msg">연구자로 등록된 구글 계정만 볼 수 있어요 (firestore.rules 의 이메일 목록).</p>
+</div>
+
+<div id="main" hidden>
+  <div class="card noprint">
+    <h2>설정</h2>
+    <div class="row">
+      <label>블록마다 쇼츠 시간 <input type="number" id="f-break" min="1" max="15" step="0.5" value="3"> 분</label>
+      <button id="b-save-settings">저장</button>
+    </div>
+    <p class="msg" id="settings-msg"></p>
+  </div>
+
+  <div class="card noprint">
+    <h2>참가자 만들기</h2>
+    <div class="row">
+      <label><input type="number" id="f-count" min="1" max="120" value="36"> 명 더 만들기</label>
+      <button class="primary" id="b-create">만들기</button>
+    </div>
+    <p class="msg">조건 순서는 6가지(N C M, C M N, M N C, N M C, C N M, M C N)를 번호 순서대로 돌려 배정해요. 평소 이어폰 사용자를 앞 번호 절반, 비사용자를 뒤 절반에 주세요 (36명이면 P001~P018, P019~P036).</p>
+    <p class="msg" id="create-msg"></p>
+  </div>
+
+  <div class="card noprint">
+    <h2>자료</h2>
+    <div class="row">
+      <button id="b-refresh">새로 고침</button>
+      <button id="b-export">본 실험 기록 내려받기 (JSON)</button>
+      <button id="b-export-test">작동 점검 기록 내려받기</button>
+      <button class="danger" id="b-clear-test">작동 점검 기록 지우기</button>
+    </div>
+    <p class="msg" id="data-msg"></p>
+  </div>
+
+  <div class="card">
+    <h2>참가자 <small id="summary"></small></h2>
+    <table id="table"></table>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+import { firebaseConfig, configReady } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, getDocs, doc, getDoc, setDoc, writeBatch, deleteDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = (id) => document.getElementById(id);
+const ORDERS = [["N","C","M"],["C","M","N"],["M","N","C"],["N","M","C"],["C","N","M"],["M","C","N"]];
+const NAME = { N: "없음", C: "노캔", M: "노캔+음악" };
+const BASE = location.href.replace(/admin\.html.*$/, "");
+
+if (!configReady) {
+  $("login-msg").className = "msg err";
+  $("login-msg").textContent = "firebase-config.js 에 Firebase 설정값을 먼저 넣어 주세요.";
+  $("b-login").disabled = true;
+  throw new Error("config not ready");
+}
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+$("b-login").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => {
+  $("login-msg").className = "msg err"; $("login-msg").textContent = "로그인 실패: " + (e.code || e.message);
+});
+$("b-logout").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, async (user) => {
+  $("b-login").hidden = !!user; $("b-logout").hidden = !user;
+  $("who").textContent = user ? user.email : "";
+  $("main").hidden = true;
+  if (!user) return;
+  try {
+    await refresh();
+    $("main").hidden = false;
+    $("login-msg").className = "msg"; $("login-msg").textContent = "로그인됨.";
+  } catch (e) {
+    $("login-msg").className = "msg err";
+    $("login-msg").textContent = "이 계정은 연구자로 등록돼 있지 않거나 규칙이 아직 게시되지 않았어요 (" + (e.code || e.message) + ").";
+  }
+});
+
+function token12() {
+  const abc = "abcdefghijkmnpqrstuvwxyz23456789";
+  const a = new Uint8Array(12); crypto.getRandomValues(a);
+  return Array.from(a, (x) => abc[x % abc.length]).join("");
+}
+
+async function loadParticipants() {
+  const snap = await getDocs(collection(db, "participants"));
+  return snap.docs.map((d) => ({ token: d.id, ...d.data() })).sort((a, b) => a.pid.localeCompare(b.pid));
+}
+
+async function refresh() {
+  const s = await getDoc(doc(db, "settings", "app"));
+  if (s.exists() && s.data().breakMin) $("f-break").value = s.data().breakMin;
+  const list = await loadParticipants();
+  const recSnap = await getDocs(collection(db, "records"));
+  const recs = recSnap.docs.map((d) => d.data());
+  const nb = Math.max(3, ...list.map((p) => p.order.length));
+  const head = `<tr><th>번호</th>${Array.from({ length: nb }, (_, i) => `<th>${i + 1}블록</th>`).join("")}<th>기록</th><th class="noprint">링크</th><th>QR</th></tr>`;
+  let finished = 0;
+  const rows = list.map((p) => {
+    const done = p.done || [];
+    if (done.length >= p.order.length) finished++;
+    const cells = p.order.map((c, i) => {
+      const s = `s${i + 1}`;
+      return done.includes(s) ? `<td class="done">${NAME[c] || c} 완료</td>` : `<td>${NAME[c] || c}</td>`;
+    }).join("");
+    const mine = recs.filter((r) => r.token === p.token);
+    const partial = mine.filter((r) => r.meta && (r.meta.partial || r.meta.aborted)).length;
+    const link = `${BASE}?k=${p.token}`;
+    return `<tr><th>${p.pid}</th>${cells}<td>${mine.length}${partial ? ` <small>(끊김 ${partial})</small>` : ""}</td>`
+      + `<td class="link noprint"><a href="${link}" target="_blank">${link}</a><br><button data-copy="${link}">복사</button></td>`
+      + `<td><div class="qr" data-url="${link}"></div></td></tr>`;
+  }).join("");
+  $("table").innerHTML = head + rows;
+  $("summary").textContent = `${list.length}명, 모두 끝낸 사람 ${finished}명, 기록 ${recs.length}개`;
+  if (window.QRCode) document.querySelectorAll(".qr").forEach((el) => new QRCode(el, { text: el.dataset.url, width: 96, height: 96 }));
+  document.querySelectorAll("button[data-copy]").forEach((b) => b.onclick = () => navigator.clipboard.writeText(b.dataset.copy).then(() => { b.textContent = "복사됨"; }));
+}
+$("b-refresh").onclick = () => refresh().catch((e) => { $("data-msg").textContent = "실패: " + e.code; });
+
+$("b-save-settings").onclick = async () => {
+  const v = Number($("f-break").value);
+  if (!(v >= 1 && v <= 15)) { $("settings-msg").textContent = "1~15분 사이로 넣어 주세요."; return; }
+  await setDoc(doc(db, "settings", "app"), { breakMin: v }, { merge: true });
+  $("settings-msg").textContent = `저장됨: 쇼츠 ${v}분 (참가자가 다음에 링크를 열 때부터 적용)`;
+};
+
+$("b-create").onclick = async () => {
+  const n = Number($("f-count").value);
+  if (!(n >= 1 && n <= 120)) return;
+  const list = await loadParticipants();
+  const start = list.reduce((m, p) => Math.max(m, Number(p.pid.slice(1))), 0);
+  if (!confirm(`P${String(start + 1).padStart(3, "0")}부터 ${n}명을 만들까요?`)) return;
+  const batch = writeBatch(db);
+  for (let i = 1; i <= n; i++) {
+    const num = start + i;
+    batch.set(doc(db, "participants", token12()), { pid: `P${String(num).padStart(3, "0")}`, order: ORDERS[(num - 1) % ORDERS.length], done: [], createdAt: Date.now() });
+  }
+  await batch.commit();
+  $("create-msg").textContent = `${n}명을 만들었어요.`;
+  await refresh();
+};
+
+function download(name, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function stamp() { return new Date().toISOString().slice(0, 16).replace(/[-:T]/g, ""); }
+$("b-export").onclick = async () => {
+  const snap = await getDocs(collection(db, "records"));
+  download(`records_${stamp()}.json`, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  $("data-msg").textContent = `본 실험 기록 ${snap.size}개를 내려받았어요. OneDrive 밖 폴더에 보관하세요.`;
+};
+$("b-export-test").onclick = async () => {
+  const snap = await getDocs(collection(db, "testRecords"));
+  download(`test_records_${stamp()}.json`, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  $("data-msg").textContent = `작동 점검 기록 ${snap.size}개를 내려받았어요.`;
+};
+$("b-clear-test").onclick = async () => {
+  const snap = await getDocs(collection(db, "testRecords"));
+  if (!confirm(`작동 점검 기록 ${snap.size}개를 지울까요? 되돌릴 수 없어요.`)) return;
+  for (const d of snap.docs) await deleteDoc(d.ref);
+  $("data-msg").textContent = `작동 점검 기록 ${snap.size}개를 지웠어요.`;
+};
+</script>
+</body>
+</html>

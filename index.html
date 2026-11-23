@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="집중 체크">
+<title>집중 체크</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --fg: #1b1b1b; --muted: #666; --line: #d9d9d4;
+    --accent: #1f5fbf; --accent-fg: #fff; --warn: #b3261e; --ok: #1e7a3c;
+    --flash-a: #fff6a8; --flash-b: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-size: 17px; line-height: 1.5; -webkit-tap-highlight-color: transparent;
+  }
+  .screen { display: none; min-height: 100%; padding: 24px 16px 40px; max-width: 520px; margin: 0 auto; }
+  .screen.on { display: block; }
+  h1 { font-size: 24px; margin: 4px 0 8px; }
+  h2 { font-size: 18px; margin: 22px 0 8px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 15px; }
+  .tag { display: inline-block; font-size: 14px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; margin-right: 6px; }
+  .cond { font-size: 22px; font-weight: 800; margin: 16px 0 10px; line-height: 1.4; }
+  .big { font-size: 20px; font-weight: 700; margin: 14px 0; }
+  .order { margin: 10px 0 0; padding: 0; list-style: none; }
+  .order li { display: flex; gap: 10px; padding: 6px 0; color: var(--muted); font-size: 15px; }
+  .order li b { color: var(--fg); min-width: 52px; }
+  .todo { margin: 14px 0 0; padding: 0; list-style: none; }
+  .todo li { padding: 10px 0; border-top: 1px solid var(--line); }
+  .btn {
+    display: block; width: 100%; margin: 22px 0 0; padding: 18px; font-size: 20px; font-weight: 800;
+    border: 0; border-radius: 14px; background: var(--accent); color: var(--accent-fg); cursor: pointer;
+  }
+  .btn.secondary { background: #e4e4df; color: var(--fg); font-size: 17px; padding: 14px; }
+  .btn:disabled { opacity: .4; }
+  .clock { font-size: 56px; font-weight: 800; text-align: center; margin: 22px 0 0; font-variant-numeric: tabular-nums; }
+  .count { font-size: 64px; font-weight: 800; text-align: center; margin: 28px 0 8px; font-variant-numeric: tabular-nums; }
+  .center { text-align: center; }
+  .next { margin-top: 22px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+  .status { margin-top: 14px; font-size: 15px; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--warn); }
+  .notice { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #fff3f2; color: var(--warn); font-size: 14px; }
+
+  .scale { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 6px; }
+  .scale button, .choices button {
+    padding: 13px 0; font-size: 17px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--fg);
+  }
+  .scale button.sel, .choices button.sel { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .anchors { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .choices { display: grid; gap: 8px; margin-top: 6px; }
+  .choices.two { grid-template-columns: 1fr 1fr; }
+  .choices.three { grid-template-columns: 1fr 1fr 1fr; }
+  .choices.four { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .choices.four button { padding: 12px 2px; font-size: 15px; }
+  .choices button { padding: 13px 14px; }
+  input[type=text] { width: 100%; font-size: 18px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--fg); }
+
+  #s-session { background: #000; color: #2a2a2a; max-width: none; position: fixed; inset: 0; padding: 24px 16px; }
+  #s-session .hint { font-size: 15px; }
+  #abort { position: absolute; right: 12px; bottom: 12px; background: transparent; color: #262626;
+           border: 1px solid #1a1a1a; border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+
+  #probe { display: none; position: fixed; inset: 0; z-index: 10; padding: 24px 16px;
+           background: var(--flash-a); color: #111; animation: flash 1s steps(1) infinite; }
+  #probe.on { display: flex; flex-direction: column; justify-content: center; }
+  @keyframes flash { 0% { background: var(--flash-a); } 50% { background: var(--flash-b); } }
+  #probe .q { font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 18px; }
+  #probe .rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  #probe .rate button { padding: 22px 0; font-size: 26px; font-weight: 800; border-radius: 14px; border: 2px solid #111; background: #fff; color: #111; }
+  #probe .anchors { color: #333; font-size: 15px; }
+  #probe .reasons { display: grid; gap: 10px; }
+  #probe .reasons button { padding: 18px; font-size: 20px; font-weight: 700; border-radius: 14px; border: 2px solid #111; background: #fff; color: #111; }
+
+  #ka { position: fixed; left: 0; bottom: 0; width: 2px; height: 2px; opacity: 0.01; pointer-events: none; }
+  #debug { position: fixed; left: 8px; bottom: 8px; z-index: 20; font-size: 12px; color: #7a7a7a; }
+  #debug button { font-size: 12px; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<section class="screen on" id="s-loading">
+  <h1>집중 체크</h1>
+  <p class="muted">불러오는 중...</p>
+</section>
+
+<section class="screen" id="s-error">
+  <h1 id="err-title">열 수 없어요</h1>
+  <p id="err-text"></p>
+  <button class="btn" id="b-err-retry">다시 시도</button>
+</section>
+
+<!-- 오늘 할 일: 참가자가 누르는 버튼은 여기 하나 -->
+<section class="screen" id="s-home">
+  <span class="tag" id="home-tag"></span>
+  <h1 id="home-title"></h1>
+  <div id="home-active">
+    <p id="home-summary"></p>
+    <ul class="order" id="home-order"></ul>
+    <ul class="todo">
+      <li>방해금지(집중 모드)를 켜 주세요.</li>
+      <li id="home-warm-li"></li>
+      <li>그다음은 화면이 알아서 안내해요. 공부 중에 화면이 밝게 깜빡이면 숫자 하나만 누르면 돼요. 블록이 끝날 때마다 짧은 설문이 있어요.</li>
+    </ul>
+    <button class="btn" id="b-start">시작</button>
+  </div>
+  <div id="home-finished" hidden>
+    <p class="cond">모든 블록이 끝났어요. 참여해 줘서 고마워요.</p>
+  </div>
+  <p class="notice" id="home-preview" hidden>미리보기 모드: Firebase 설정 전이라 기록이 저장되지 않아요.</p>
+</section>
+
+<!-- 쇼츠 시간 -->
+<section class="screen" id="s-warm">
+  <span class="tag" id="warm-tag"></span>
+  <h1 id="warm-title">쇼츠 시간</h1>
+  <p class="big" id="warm-text"></p>
+  <div class="clock" id="warm-clock"></div>
+  <p class="muted center" id="warm-count"></p>
+  <p class="muted center" id="warm-sub"></p>
+  <div class="next" id="warm-next"></div>
+  <p class="status" id="warm-save"></p>
+</section>
+
+<!-- 공부 준비: 30초 뒤 자동 시작 -->
+<section class="screen" id="s-ready">
+  <span class="tag" id="ready-tag"></span>
+  <h1>공부 준비</h1>
+  <p class="cond" id="ready-cond"></p>
+  <p>폰은 화면이 위로 오게 책상 위, 눈에 보이는 곳에 두세요.</p>
+  <div class="count" id="ready-count">30</div>
+  <p class="muted center">초 뒤에 자동으로 공부가 시작돼요</p>
+  <button class="btn secondary" id="b-now">준비됐어요, 지금 시작</button>
+</section>
+
+<section class="screen" id="s-session">
+  <p class="hint" id="session-hint">공부 중이에요. 화면이 밝아지면 숫자 하나만 눌러 주세요.</p>
+  <button id="abort">연구자: 중단</button>
+</section>
+
+<div id="probe" role="dialog" aria-live="assertive">
+  <div id="probe-rate">
+    <div class="q">방금 공부에<br>얼마나 집중했나요?</div>
+    <div class="rate">
+      <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button>
+      <button data-v="4">4</button><button data-v="5">5</button>
+    </div>
+    <div class="anchors"><span>전혀 안 됨</span><span>완전히 집중</span></div>
+  </div>
+  <div id="probe-reason" hidden>
+    <div class="q">주로 무엇 때문이었나요?</div>
+    <div class="reasons">
+      <button data-v="phone">폰 생각</button>
+      <button data-v="surround">주변 소리나 일</button>
+      <button data-v="other">다른 생각</button>
+      <button data-v="blank">멍함</button>
+    </div>
+  </div>
+</div>
+
+<!-- 블록마다 끝 설문 -->
+<section class="screen" id="s-post">
+  <h1 id="post-title">블록 끝</h1>
+  <p class="muted">30초면 끝나요.</p>
+  <h2>몇 분쯤 지나서 공부에 집중됐다고 느꼈나요?</h2>
+  <div class="choices" data-key="post.feltEntry">
+    <button data-v="0-1">바로 (1분 안)</button>
+    <button data-v="1-3">1~3분</button>
+    <button data-v="3-5">3~5분</button>
+    <button data-v="5-10">5~10분</button>
+    <button data-v="10-15">10~15분</button>
+    <button data-v="15+">15분 넘어서</button>
+    <button data-v="never">끝까지 잘 안 됨</button>
+  </div>
+  <h2>지금 기분은?</h2>
+  <div class="scale" data-key="post.mood"></div>
+  <div class="anchors"><span>아주 나쁨</span><span>아주 좋음</span></div>
+  <h2>지금 얼마나 깨어 있나요?</h2>
+  <div class="scale" data-key="post.arousal"></div>
+  <div class="anchors"><span>아주 졸림</span><span>아주 또렷함</span></div>
+  <h2>질문에 답할 때 말고 폰을 쓴 적이 있나요?</h2>
+  <div class="choices two" data-key="post.usedPhone">
+    <button data-v="no">아니요</button><button data-v="yes">예</button>
+  </div>
+  <div id="ear-q">
+    <h2>이어폰이나 음악에 문제가 있었나요? (끊김, 광고, 배터리)</h2>
+    <div class="choices two" data-key="post.earIssue">
+      <button data-v="no">아니요</button><button data-v="yes">예</button>
+    </div>
+  </div>
+  <div id="music-q">
+    <h2>들은 음악에 가사가 있었나요?</h2>
+    <div class="choices three" data-key="post.lyrics">
+      <button data-v="yes">있음</button><button data-v="no">없음</button><button data-v="mixed">섞임</button>
+    </div>
+    <h2>주로 어떤 음악이었나요?</h2>
+    <div class="choices four" data-key="post.genre">
+      <button data-v="kpop">K-pop</button><button data-v="pop">팝</button><button data-v="hiphop">힙합</button><button data-v="ballad">발라드</button>
+      <button data-v="classical">클래식</button><button data-v="lofi">lofi</button><button data-v="ost">OST</button><button data-v="other">기타</button>
+    </div>
+    <h2>들은 플레이리스트를 캡처해서 연구자에게 카톡으로 보내 주세요</h2>
+    <p class="muted" id="music-how">플레이리스트 부분만 보이게 캡처하고, 참가 번호를 같이 적어 보내 주세요.</p>
+    <div class="choices two" data-key="post.playlistSent">
+      <button data-v="sent">보냈어요</button><button data-v="later">끝나고 보낼게요</button>
+    </div>
+  </div>
+  <h2>이번 블록에 몇 쪽 또는 몇 문제 했나요? (선택)</h2>
+  <input id="f-amount" type="text" autocomplete="off" placeholder="예: 12쪽, 문제 15개">
+  <button class="btn" id="b-post" disabled>제출</button>
+</section>
+
+<section class="screen" id="s-done">
+  <h1 id="done-title">오늘 다 끝났어요</h1>
+  <p class="big" id="done-text">수고했어요.</p>
+  <p class="status" id="save-status">저장 중...</p>
+  <p class="muted" id="done-sub"></p>
+</section>
+
+<video id="ka" muted playsinline loop preload="auto" src="data:video/mp4;base64,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"></video>
+<div id="debug" hidden></div>
+
+<script type="module">
+import { firebaseConfig, configReady } from "./firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, updateDoc, arrayUnion, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const VERSION = "web-2026-11-23";
+const Q = new URLSearchParams(location.search);
+const DEBUG = Q.get("debug") === "1";
+const TEST = Q.get("test") === "1";
+const SHOT = TEST && !!Q.get("shot");
+const PREVIEW = !configReady;          // 설정 전: 화면만 보고 저장은 안 함
+
+let db = null;
+if (!PREVIEW) {
+  const app = initializeApp(firebaseConfig);
+  db = initializeFirestore(app, { localCache: persistentLocalCache() });   // 인터넷이 끊겨도 기기에 쌓았다가 자동으로 올림
+}
+
+const REAL = { warmMs: 3 * 60e3, restMs: 2 * 60e3, readyMs: 30e3, sessionMs: 20 * 60e3,
+               gapMin: 60e3, gapMax: 120e3, endBuffer: 15e3, timeout: 20e3, reasonTimeout: 15e3 };
+const QUICK = { warmMs: 20e3, restMs: 20e3, readyMs: 10e3, sessionMs: 2 * 60e3,
+                gapMin: 15e3, gapMax: 30e3, endBuffer: 10e3, timeout: 20e3, reasonTimeout: 15e3 };
+const cfg = Object.assign({}, TEST && !SHOT ? QUICK : REAL);
+
+const COND_TEXT = {
+  N: "이어폰 없이 공부해요. 이어폰은 빼서 가방에 넣어 주세요.",
+  C: "이어폰을 끼고 노이즈캔슬링을 켜 주세요. 소리는 틀지 않아요.",
+  M: "이어폰을 끼고 노이즈캔슬링을 켠 뒤, 평소 공부할 때 듣는 음악을 틀어 주세요.",
+  R: "이어폰 없이 공부해요. 이어폰은 빼서 가방에 넣어 주세요."
+};
+const COND_SHORT = { N: "이어폰 없음", C: "노이즈캔슬링만, 소리 없음", M: "노이즈캔슬링 + 평소 듣는 음악", R: "이어폰 없음" };
+const EAR = new Set(["C", "M"]);
+
+const $ = (id) => document.getElementById(id);
+const now = () => Date.now();
+const LS_TOKEN = "focus_token", LS_PROGRESS = "focus_inprogress", LS_FAILED = "focus_failed";
+
+let info = null, plan = [], bi = 0, runId = "", rec = null;
+let phase = "", phaseStart = 0, active = null, nextIdx = 0, timer = null, stopAfterThis = false;
+const awake = { wl: null, on: false };
+const pending = new Set();
+
+// ---------- 저장소 ----------
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+function backup() { if (rec) lsSet(LS_PROGRESS, rec); }
+
+function show(id) {
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === id));
+  window.scrollTo(0, 0);
+  if (rec) { rec.screen = id; backup(); }
+}
+function showError(title, text) { $("err-title").textContent = title; $("err-text").textContent = text; show("s-error"); }
+
+// ---------- Firebase에 저장 ----------
+// 블록마다 문서 하나 (records 또는 testRecords). 같은 블록은 같은 문서 이름이라 두 번 올라가지 않는다.
+function saveRecord(r, isRetry = false) {
+  const data = JSON.parse(JSON.stringify(r));   // undefined 값 제거
+  if (PREVIEW) { console.log("[미리보기] 저장 안 함", data); return Promise.resolve(); }
+  const coll = data.meta.testMode ? "testRecords" : "records";
+  Object.assign(data, { token: data.meta.token || "", participant: data.meta.participant, session: data.meta.session,
+                        condition: data.meta.condition, testMode: !!data.meta.testMode, savedAt: serverTimestamp() });
+  const complete = !data.meta.testMode && /^s\d$/.test(data.meta.session) && !data.meta.partial && !data.meta.aborted;
+  const markDone = () => complete
+    ? updateDoc(doc(db, "participants", data.meta.token), { done: arrayUnion(data.meta.session) }) : null;
+  const p = setDoc(doc(db, coll, data.meta.recordId), data)
+    .catch((e) => {
+      // 다시 보낼 때 "권한 없음"이면 이미 올라간 기록이라 덮어쓰기가 막힌 것 (기록은 새로 만들기만 허용)
+      if (isRetry && e && e.code === "permission-denied") return;
+      throw e;
+    })
+    .then(markDone);
+  pending.add(p);
+  p.then(() => { pending.delete(p); saveNote(); })
+   .catch((e) => {
+     pending.delete(p);
+     const failed = lsGet(LS_FAILED, []); failed.push({ record: r, error: String(e && e.code || e) }); lsSet(LS_FAILED, failed);
+     saveNote();
+   });
+  saveNote();
+  return p;
+}
+function retryFailed() {
+  const failed = lsGet(LS_FAILED, []);
+  if (!failed.length || PREVIEW) return;
+  lsSet(LS_FAILED, []);
+  failed.forEach((f) => saveRecord(f.record, true));
+}
+function rescueLeftover() {   // 지난번에 끊긴 블록은 "중간 끊김"으로 저장
+  const left = lsGet(LS_PROGRESS, null);
+  if (left && left.meta) {
+    left.meta.partial = !(left.times && left.times.submitted);
+    saveRecord(left);
+    lsDel(LS_PROGRESS);
+  }
+}
+function saveNote() {
+  const el = $("warm-save"); if (!el) return;
+  const n = pending.size, f = lsGet(LS_FAILED, []).length;
+  el.className = "status" + (n || f ? " err" : "");
+  el.textContent = f ? `저장 못 한 기록 ${f}개 (연구자에게 알려 주세요)` : (n ? `올리는 중인 기록 ${n}개 (인터넷이 연결되면 자동으로 올라가요)` : "");
+}
+
+// ---------- 화면 꺼짐 막기 ----------
+async function keepAwakeOn() {
+  awake.on = true;
+  let method = "none";
+  if ("wakeLock" in navigator) { try { awake.wl = await navigator.wakeLock.request("screen"); method = "wakelock"; } catch (e) {} }
+  if (method === "none") { const v = $("ka"); v.muted = true; try { await v.play(); method = "video"; } catch (e) {} }
+  if (rec) { rec.meta.keepAwake = method; backup(); }
+}
+function keepAwakeOff() {
+  awake.on = false;
+  if (awake.wl) { awake.wl.release().catch(() => {}); awake.wl = null; }
+  $("ka").pause();
+}
+document.addEventListener("visibilitychange", () => {
+  if (rec) { rec.visibility.push({ at: now(), state: document.visibilityState, phase }); backup(); }
+  if (document.visibilityState === "visible" && awake.on) keepAwakeOn();
+  if (document.visibilityState === "visible" && phase) tick();
+});
+window.addEventListener("beforeunload", (e) => {
+  if (phase === "session" || phase === "ready" || phase === "post" || pending.size) { e.preventDefault(); e.returnValue = ""; }
+});
+
+// ---------- 불러오기 ----------
+async function load() {
+  show("s-loading");
+  rescueLeftover();
+  retryFailed();
+  if (TEST) {
+    const conds = (Q.get("c") || "N,M").split(",").filter((c) => COND_TEXT[c]);
+    info = { participant: SHOT ? "P001" : "PTEST", token: "", total: conds.length };
+    plan = conds.map((c, i) => ({ session: "test" + (i + 1), sessionNo: i + 1, condition: c }));
+    return showHome();
+  }
+  if (PREVIEW) return showError("아직 준비 중이에요", "연구자가 Firebase 설정을 마치면 열 수 있어요.");
+  const token = Q.get("k") || lsGet(LS_TOKEN, null);
+  if (!token) return showError("개인 링크로 열어 주세요", "연구자에게 받은 개인 링크를 눌러 주세요. 링크가 없으면 연구자에게 다시 받아 주세요.");
+  try {
+    const [pSnap, sSnap] = await Promise.all([getDoc(doc(db, "participants", token)), getDoc(doc(db, "settings", "app"))]);
+    if (!pSnap.exists()) {
+      if (!Q.get("k")) lsDel(LS_TOKEN);
+      return showError("링크가 맞지 않아요", "연구자에게 개인 링크를 다시 받아 주세요.");
+    }
+    const p = pSnap.data(), s = sSnap.exists() ? sSnap.data() : {};
+    if (s.breakMin > 0) cfg.warmMs = s.breakMin * 60e3;
+    lsSet(LS_TOKEN, token);
+    info = { participant: p.pid, token, total: p.order.length };
+    const done = p.done || [];
+    plan = p.order.map((c, i) => ({ session: `s${i + 1}`, sessionNo: i + 1, condition: c })).filter((b) => !done.includes(b.session));
+    if (Q.get("s") === "pilot") plan = [{ session: "pilot", sessionNo: 0, condition: Q.get("c") || "R" }];
+    showHome();
+  } catch (e) {
+    showError("연결이 안 돼요", "인터넷 연결을 확인하고 다시 시도해 주세요. (" + (e.code || e.message || e) + ")");
+  }
+}
+$("b-err-retry").onclick = load;
+
+// ---------- 오늘 할 일 ----------
+function minutesFor(n) { return Math.round(n * (cfg.warmMs + cfg.readyMs + cfg.sessionMs + 60e3) / 60e3); }
+function showHome() {
+  const pilot = plan.length === 1 && plan[0].session === "pilot";
+  $("home-tag").textContent = info.participant;
+  $("home-preview").hidden = !PREVIEW;
+  const finished = !plan.length;
+  $("home-active").hidden = finished; $("home-finished").hidden = !finished;
+  if (finished) { $("home-title").textContent = "모두 끝"; show("s-home"); return; }
+  if (TEST && !SHOT) $("home-title").textContent = `작동 점검 (${plan.length}블록)`;
+  else if (pilot) $("home-title").textContent = "예비 블록";
+  else if (plan.length === info.total) $("home-title").textContent = "오늘 할 일";
+  else $("home-title").textContent = `${plan[0].sessionNo}블록부터 이어서`;
+  const mins = minutesFor(plan.length);
+  $("home-summary").textContent = pilot ? "공부 한 블록만 해요."
+    : `공부 블록 ${plan.length}개를 이어서 해요. 블록마다 공부 전에 쇼츠 보는 시간이 있어요. 약 ${mins >= 60 ? Math.floor(mins / 60) + "시간 " + (mins % 60 ? (mins % 60) + "분" : "") : mins + "분"}.`;
+  $("home-order").innerHTML = plan.map((b, i) => `<li><b>${pilot ? "블록" : (b.sessionNo || i + 1) + "블록"}</b><span>${COND_SHORT[b.condition] || ""}</span></li>`).join("");
+  const rest = plan[0].condition === "R";
+  $("home-warm-li").textContent = rest ? "시작을 누르면 2분 동안 눈을 감고 쉬어요."
+    : `시작을 누르고 ${cfg.warmMs >= 60e3 ? Math.round(cfg.warmMs / 60e3) + "분" : Math.round(cfg.warmMs / 1000) + "초"} 동안 쇼츠를 보세요 (유튜브 쇼츠, 릴스, 틱톡 아무거나). 돌아올 시각은 화면에 나와요.`;
+  show("s-home");
+}
+
+$("b-start").onclick = () => {
+  if (navigator.vibrate) navigator.vibrate(1);
+  runId = Math.random().toString(36).slice(2, 10);
+  bi = 0; stopAfterThis = false;
+  keepAwakeOn();
+  beginBlock();
+};
+
+// ---------- 블록 하나 ----------
+function blockLabel() { const b = plan[bi]; return b.session === "pilot" ? "예비" : `${b.sessionNo || bi + 1}블록 / ${info.total || plan.length}`; }
+function beginBlock() {
+  const b = plan[bi];
+  rec = {
+    meta: { version: VERSION, recordId: `${info.token || "test"}_${b.session}_${runId}`, token: info.token, participant: info.participant,
+            session: b.session, sessionNo: b.sessionNo, condition: b.condition, testMode: TEST, continuous: true, runId,
+            positionInRun: bi + 1, config: cfg, createdAt: now(), userAgent: navigator.userAgent, vibrate: "vibrate" in navigator,
+            keepAwake: "", partial: false, aborted: false, preview: PREVIEW },
+    post: {}, times: {}, schedule: [], probes: [], visibility: [], screen: ""
+  };
+  keepAwakeOn();
+  const rest = b.condition === "R";
+  const need = rest ? cfg.restMs : cfg.warmMs;
+  rec.times.warmStart = now();
+  $("warm-tag").textContent = blockLabel();
+  $("warm-title").textContent = rest ? "쉬는 시간" : "쇼츠 시간";
+  $("warm-text").textContent = rest ? "눈을 감고 편히 쉬세요." : "쇼츠를 보세요. 유튜브 쇼츠, 릴스, 틱톡 아무거나 괜찮아요. 메시지나 게임은 하지 않아요.";
+  const back = new Date(rec.times.warmStart + need);
+  $("warm-clock").textContent = rest ? "" : `${back.getHours()}:${String(back.getMinutes()).padStart(2, "0")}까지`;
+  $("warm-sub").textContent = rest ? "시간이 끝나면 연구자가 알려 줘요." : "이 페이지를 나가서 보면 돼요. 본 내용은 기록하지 않아요. 위 시각이 되면 이 페이지로 돌아오세요.";
+  $("warm-next").innerHTML = `<b>다음 공부:</b> ${COND_SHORT[b.condition] || ""}`;
+  saveNote();
+  startPhase("warm");
+  show("s-warm");
+}
+function startPhase(p) { phase = p; phaseStart = now(); clearInterval(timer); timer = setInterval(tick, 250); tick(); }
+function fmt(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function tick() {
+  if (!rec) return;
+  const t = now() - phaseStart;
+  if (phase === "warm") {
+    const need = plan[bi].condition === "R" ? cfg.restMs : cfg.warmMs;
+    $("warm-count").textContent = "남은 시간 " + fmt(need - t);
+    if (t >= need && !document.hidden) {
+      rec.times.warmEnd = now();
+      $("ready-tag").textContent = blockLabel();
+      $("ready-cond").textContent = COND_TEXT[plan[bi].condition] || "";
+      if (navigator.vibrate) navigator.vibrate([300, 120, 300]);
+      startPhase("ready"); show("s-ready");
+    }
+  } else if (phase === "ready") {
+    $("ready-count").textContent = Math.max(0, Math.ceil((cfg.readyMs - t) / 1000));
+    if (t >= cfg.readyMs) startStudy("auto");
+  } else if (phase === "session") {
+    sessionTick();
+  }
+  updateDebug();
+}
+$("b-now").onclick = () => startStudy("button");
+
+function makeSchedule() {
+  const out = []; let t = 0;
+  for (;;) { t += cfg.gapMin + Math.random() * (cfg.gapMax - cfg.gapMin); if (t > cfg.sessionMs - cfg.endBuffer) break; out.push(Math.round(t)); }
+  return out;
+}
+function startStudy(how) {
+  if (phase === "session") return;
+  rec.times.studyStart = now();
+  rec.meta.startedBy = how;
+  rec.schedule = makeSchedule();
+  rec.probes = rec.schedule.map((due, i) => ({ i: i + 1, dueMs: due, shownMs: null, answeredMs: null, rating: null, reason: null, missed: null }));
+  nextIdx = 0; active = null;
+  $("session-hint").textContent = `${blockLabel()}. 공부 중이에요. 화면이 밝아지면 숫자 하나만 눌러 주세요.`;
+  keepAwakeOn();
+  startPhase("session");
+  show("s-session");
+}
+function sessionTick() {
+  const t = now() - rec.times.studyStart;
+  if (active) {
+    const limit = active.stage === "rate" ? cfg.timeout : cfg.reasonTimeout;
+    if (now() - active.openedAt > limit) { if (active.stage === "rate") active.p.missed = "timeout"; closeProbe(); }
+    return;
+  }
+  if (nextIdx < rec.probes.length && t >= rec.probes[nextIdx].dueMs) {
+    const p = rec.probes[nextIdx++];
+    if (document.hidden) { p.missed = "hidden"; backup(); } else openProbe(p, t);
+    return;
+  }
+  if (t >= cfg.sessionMs) endBlock(false);
+}
+function openProbe(p, t) {
+  p.shownMs = Math.round(t);
+  active = { p, stage: "rate", openedAt: now() };
+  $("probe-rate").hidden = false; $("probe-reason").hidden = true;
+  $("probe").classList.add("on");
+  if (navigator.vibrate) navigator.vibrate([400, 150, 400]);
+  backup();
+}
+function closeProbe() { $("probe").classList.remove("on"); active = null; backup(); }
+$("probe-rate").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || !active || active.stage !== "rate") return;
+  const p = active.p;
+  p.rating = Number(b.dataset.v);
+  p.answeredMs = now() - rec.times.studyStart;
+  if (p.rating <= 2) { active.stage = "reason"; active.openedAt = now(); $("probe-rate").hidden = true; $("probe-reason").hidden = false; backup(); }
+  else closeProbe();
+});
+$("probe-reason").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || !active || active.stage !== "reason") return;
+  active.p.reason = b.dataset.v; closeProbe();
+});
+$("abort").onclick = () => {
+  if (confirm("이 블록을 중단하고 오늘 진행을 멈출까요? 링크를 다시 열면 이 블록부터 다시 해요.")) { stopAfterThis = true; endBlock(true); }
+};
+function isLast() { return bi >= plan.length - 1; }
+function endBlock(aborted) {
+  clearInterval(timer);
+  if (active) { if (active.stage === "rate") active.p.missed = "timeout"; closeProbe(); }
+  phase = "post";
+  rec.times.studyEnd = now();
+  rec.meta.aborted = aborted;
+  for (const p of rec.probes) if (p.shownMs === null && p.missed === null) p.missed = "not reached";
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+  const last = isLast() || stopAfterThis;
+  $("post-title").textContent = aborted ? "중단했어요" : (isLast() ? "마지막 블록 끝" : `${plan[bi].sessionNo || bi + 1}블록 끝`);
+  $("b-post").textContent = last ? "제출하고 마치기" : "제출하고 쉬는 시간으로";
+  $("ear-q").hidden = !EAR.has(rec.meta.condition);
+  $("music-q").hidden = rec.meta.condition !== "M";
+  $("music-how").textContent = `플레이리스트 부분만 보이게 캡처해서, 참가 번호 ${info.participant}를 같이 적어 연구자에게 카톡으로 보내 주세요. 이름이나 프로필, 위쪽 알림이 보이면 잘라 주세요.`;
+  $("f-amount").value = "";
+  document.querySelectorAll("#s-post button.sel").forEach((b) => b.classList.remove("sel"));
+  updatePost();
+  show("s-post");
+}
+
+// ---------- 끝 설문 ----------
+function buildScales() {
+  document.querySelectorAll(".scale").forEach((box) => {
+    for (let v = 1; v <= 7; v++) { const b = document.createElement("button"); b.type = "button"; b.textContent = v; b.dataset.v = v; box.appendChild(b); }
+  });
+  document.querySelectorAll("#s-post .scale, #s-post .choices").forEach((box) => {
+    box.addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b || !rec) return;
+      box.querySelectorAll("button").forEach((x) => x.classList.toggle("sel", x === b));
+      const key = box.dataset.key.split(".")[1];
+      rec.post[key] = box.classList.contains("scale") ? Number(b.dataset.v) : b.dataset.v;
+      backup(); updatePost();
+    });
+  });
+}
+function updatePost() {
+  if (!rec) return;
+  const p = rec.post, needEar = EAR.has(rec.meta.condition), needMusic = rec.meta.condition === "M";
+  const musicOk = !needMusic || (p.lyrics && p.genre && p.playlistSent);
+  $("b-post").disabled = !(p.feltEntry && p.mood && p.arousal && p.usedPhone && (!needEar || p.earIssue) && musicOk);
+}
+$("b-post").onclick = () => {
+  rec.post.amount = $("f-amount").value.trim();
+  rec.times.submitted = now();
+  saveRecord(rec);
+  lsDel(LS_PROGRESS);
+  rec = null;
+  if (isLast() || stopAfterThis) finishRun();
+  else { bi += 1; beginBlock(); }
+};
+
+// ---------- 오늘 끝 ----------
+async function finishRun() {
+  phase = ""; clearInterval(timer);
+  keepAwakeOff();
+  if (stopAfterThis) { $("done-title").textContent = "오늘은 여기까지"; $("done-text").textContent = "링크를 다시 열면 멈춘 블록부터 이어서 할 수 있어요."; }
+  else { $("done-title").textContent = TEST ? "작동 점검 끝" : "오늘 다 끝났어요"; $("done-text").textContent = "수고했어요."; }
+  show("s-done");
+  const st = $("save-status");
+  for (let tries = 1; ; tries++) {
+    const failed = lsGet(LS_FAILED, []).length;
+    if (!pending.size && !failed) {
+      st.className = "status ok"; st.textContent = PREVIEW ? "미리보기라 저장하지 않았어요." : "기록이 모두 저장됐어요.";
+      $("done-sub").textContent = "이 화면을 닫아도 돼요.";
+      return;
+    }
+    st.className = "status err";
+    st.textContent = failed ? `저장 못 한 기록이 ${failed}개 있어요. 이 화면을 닫지 말고 연구자에게 보여 주세요.`
+                            : `기록 ${pending.size}개를 올리는 중이에요. 인터넷이 연결되면 자동으로 올라가요.`;
+    $("done-sub").textContent = "저장됐다고 나올 때까지 이 화면을 닫지 마세요.";
+    if (failed && tries % 6 === 0) retryFailed();
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+// ---------- 개발용 ----------
+function updateDebug() {
+  if (!DEBUG || !rec) return;
+  const el = $("debug"); el.hidden = false;
+  if (!el.dataset.ready) {
+    el.dataset.ready = "1";
+    el.innerHTML = '<span id="d-info"></span> <button id="d-skip">단계 건너뛰기</button><button id="d-fire">질문 띄우기</button><button id="d-end">블록 끝</button>';
+    $("d-skip").onclick = () => { phaseStart -= 30 * 60e3; tick(); };
+    $("d-fire").onclick = () => { if (rec && phase === "session" && !active && nextIdx < rec.probes.length) rec.probes[nextIdx].dueMs = now() - rec.times.studyStart; };
+    $("d-end").onclick = () => { if (phase === "session") endBlock(false); };
+  }
+  const done = rec.probes.filter((p) => p.rating !== null).length;
+  $("d-info").textContent = `${blockLabel()} ${phase} 질문 ${nextIdx}/${rec.probes.length} 응답 ${done} 화면유지 ${rec.meta.keepAwake}`;
+}
+
+// ---------- 화면 캡처용 (?test=1&shot=...) ----------
+function runShot(s) {
+  const css = document.createElement("style");
+  css.textContent = "#debug,#ka{display:none!important} #probe{animation:none!important}";
+  document.head.appendChild(css);
+  const steps = ["home", "warm", "ready", "session", "probe", "reason"];
+  const upto = steps.indexOf(s);
+  if (upto >= 1) $("b-start").click();
+  if (upto >= 2) { phaseStart -= 1e9; tick(); }
+  if (upto >= 3) startStudy("button");
+  if (upto >= 4) { rec.probes[0].dueMs = 0; tick(); }
+  if (upto >= 5) $("probe-rate").querySelector('button[data-v="2"]').click();
+  if (s === "post") { $("b-start").click(); phaseStart -= 1e9; tick(); startStudy("button"); endBlock(false); }
+  if (s === "done") {
+    $("b-start").click(); clearInterval(timer); phase = ""; rec = null;
+    $("save-status").className = "status ok"; $("save-status").textContent = "기록이 모두 저장됐어요.";
+    $("done-sub").textContent = "이 화면을 닫아도 돼요."; show("s-done");
+  }
+}
+
+buildScales();
+load();
+if (SHOT) setTimeout(() => runShot(Q.get("shot")), 300);
+</script>
+</body>
+</html>

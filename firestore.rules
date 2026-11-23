@@ -1,0 +1,55 @@
+rules_version = '2';
+// 집중 체크 보안 규칙. Firebase 콘솔 > Firestore Database > 규칙 탭에 통째로 붙여 넣고 "게시"를 누르세요.
+// 아래 ADMINS 목록에 연구자 구글 계정 이메일을 넣으세요 (연구자 화면을 볼 수 있는 사람).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          "연구자1@gmail.com",
+          "연구자2@gmail.com"
+        ];
+    }
+
+    // 앱 설정 (쇼츠 시간 등): 누구나 읽기, 연구자만 쓰기
+    match /settings/{id} {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    // 참가자: 문서 이름이 개인 링크의 비밀 토큰. 토큰을 아는 사람만 자기 문서 하나를 읽을 수 있다.
+    // 목록 보기와 만들기, 지우기는 연구자만. 참가자는 끝낸 블록 목록(done)만 늘릴 수 있다.
+    match /participants/{token} {
+      allow get: if true;
+      allow list, create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['done'])
+        && request.resource.data.done is list
+        && request.resource.data.done.size() <= resource.data.order.size()
+        && request.resource.data.done.hasAll(resource.data.get('done', []))
+      );
+    }
+
+    // 블록 기록: 참가자는 새로 만들기만 (고치기, 읽기 불가). 토큰과 참가 번호가 맞아야 한다.
+    match /records/{rid} {
+      allow create: if request.resource.data.token is string
+        && exists(/databases/$(database)/documents/participants/$(request.resource.data.token))
+        && get(/databases/$(database)/documents/participants/$(request.resource.data.token)).data.pid == request.resource.data.participant
+        && request.resource.data.testMode == false;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 작동 점검 기록: 누구나 새로 만들기만, 읽기와 지우기는 연구자만
+    match /testRecords/{rid} {
+      allow create: if request.resource.data.testMode == true;
+      allow read, delete: if isAdmin();
+    }
+
+    // 그 밖의 모든 것은 막는다
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
