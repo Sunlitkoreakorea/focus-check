@@ -205,7 +205,7 @@
       <button data-v="kpop">K-pop</button><button data-v="pop">팝</button><button data-v="hiphop">힙합</button><button data-v="ballad">발라드</button>
       <button data-v="classical">클래식</button><button data-v="lofi">lofi</button><button data-v="ost">OST</button><button data-v="other">기타</button>
     </div>
-    <h2>들은 플레이리스트를 캡처해서 연구자에게 카톡으로 보내 주세요</h2>
+    <h2>들은 플레이리스트를 캡처해서 연구자에게 메신저으로 보내 주세요</h2>
     <p class="muted" id="music-how">플레이리스트 부분만 보이게 캡처하고, 참가 번호를 같이 적어 보내 주세요.</p>
     <div class="choices two" data-key="post.playlistSent">
       <button data-v="sent">보냈어요</button><button data-v="later">끝나고 보낼게요</button>
@@ -540,7 +540,7 @@ function endBlock(aborted) {
   $("b-post").textContent = last ? "제출하고 마치기" : "제출하고 쉬는 시간으로";
   $("ear-q").hidden = !EAR.has(rec.meta.condition);
   $("music-q").hidden = rec.meta.condition !== "M";
-  $("music-how").textContent = `플레이리스트 부분만 보이게 캡처해서, 참가 번호 ${info.participant}를 같이 적어 연구자에게 카톡으로 보내 주세요. 이름이나 프로필, 위쪽 알림이 보이면 잘라 주세요.`;
+  $("music-how").textContent = `플레이리스트 부분만 보이게 캡처해서, 참가 번호 ${info.participant}를 같이 적어 연구자에게 메신저으로 보내 주세요. 이름이나 프로필, 위쪽 알림이 보이면 잘라 주세요.`;
   $("f-amount").value = "";
   document.querySelectorAll("#s-post button.sel").forEach((b) => b.classList.remove("sel"));
   updatePost();
