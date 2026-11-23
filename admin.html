@@ -89,7 +89,7 @@ import { firebaseConfig, configReady } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, collection, getDocs, doc, getDoc, setDoc, writeBatch, deleteDoc
+  initializeFirestore, collection, getDocs, doc, getDoc, setDoc, writeBatch, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = (id) => document.getElementById(id);
@@ -105,7 +105,8 @@ if (!configReady) {
 }
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// 광고 차단 확장, 보안 프로그램, 학교 프록시가 실시간 연결을 막는 경우가 있어 롱 폴링으로 연결한다
+const db = initializeFirestore(app, { experimentalForceLongPolling: true });
 
 $("b-login").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => {
   $("login-msg").className = "msg err"; $("login-msg").textContent = "로그인 실패: " + (e.code || e.message);
@@ -123,7 +124,9 @@ onAuthStateChanged(auth, async (user) => {
     $("login-msg").className = "msg"; $("login-msg").textContent = "로그인됨.";
   } catch (e) {
     $("login-msg").className = "msg err";
-    $("login-msg").textContent = "이 계정은 연구자로 등록돼 있지 않거나 규칙이 아직 게시되지 않았어요 (" + (e.code || e.message) + ").";
+    $("login-msg").textContent = e.code === "permission-denied"
+      ? "이 계정은 연구자로 등록돼 있지 않거나 규칙이 아직 게시되지 않았어요."
+      : "Firebase에 연결하지 못했어요. 광고 차단 확장 프로그램을 끄거나 시크릿 창에서 열어 보세요. (" + (e.code || "") + " " + (e.message || "") + ")";
   }
 });
 

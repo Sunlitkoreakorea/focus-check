@@ -243,7 +243,8 @@ const PREVIEW = !configReady;          // 설정 전: 화면만 보고 저장은
 let db = null;
 if (!PREVIEW) {
   const app = initializeApp(firebaseConfig);
-  db = initializeFirestore(app, { localCache: persistentLocalCache() });   // 인터넷이 끊겨도 기기에 쌓았다가 자동으로 올림
+  // 인터넷이 끊겨도 기기에 쌓았다가 자동으로 올림. 광고 차단, 보안 프로그램, 학교 프록시에 덜 막히게 롱 폴링으로 연결
+  db = initializeFirestore(app, { localCache: persistentLocalCache(), experimentalForceLongPolling: true });
 }
 
 const REAL = { warmMs: 3 * 60e3, restMs: 2 * 60e3, readyMs: 30e3, sessionMs: 20 * 60e3,
