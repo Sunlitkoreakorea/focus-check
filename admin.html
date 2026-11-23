@@ -69,6 +69,11 @@
       <button id="b-export-test">작동 점검 기록 내려받기</button>
       <button class="danger" id="b-clear-test">작동 점검 기록 지우기</button>
     </div>
+    <div class="row" style="margin-top:8px">
+      <button id="b-make-t">점검용 참가자 T01 만들기</button>
+      <button class="danger" id="b-clear-t">점검용 참가자(T)와 그 기록 지우기</button>
+    </div>
+    <p class="msg">점검용 참가자는 번호가 T로 시작해요. 본 실험과 같은 경로로 저장되는지 확인할 때 쓰고, 끝나면 지우세요.</p>
     <p class="msg" id="data-msg"></p>
   </div>
 
@@ -174,7 +179,7 @@ $("b-create").onclick = async () => {
   const n = Number($("f-count").value);
   if (!(n >= 1 && n <= 120)) return;
   const list = await loadParticipants();
-  const start = list.reduce((m, p) => Math.max(m, Number(p.pid.slice(1))), 0);
+  const start = list.filter((p) => p.pid.startsWith("P")).reduce((m, p) => Math.max(m, Number(p.pid.slice(1))), 0);
   if (!confirm(`P${String(start + 1).padStart(3, "0")}부터 ${n}명을 만들까요?`)) return;
   const batch = writeBatch(db);
   for (let i = 1; i <= n; i++) {
@@ -201,6 +206,23 @@ $("b-export-test").onclick = async () => {
   const snap = await getDocs(collection(db, "testRecords"));
   download(`test_records_${stamp()}.json`, snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   $("data-msg").textContent = `작동 점검 기록 ${snap.size}개를 내려받았어요.`;
+};
+$("b-make-t").onclick = async () => {
+  const list = await loadParticipants();
+  const n = list.filter((p) => p.pid.startsWith("T")).length + 1;
+  const pid = `T${String(n).padStart(2, "0")}`;
+  await setDoc(doc(db, "participants", token12()), { pid, order: ORDERS[0], done: [], createdAt: Date.now() });
+  $("data-msg").textContent = `${pid}을(를) 만들었어요. 표에서 링크를 열어 시험하세요.`;
+  await refresh();
+};
+$("b-clear-t").onclick = async () => {
+  const list = (await loadParticipants()).filter((p) => p.pid.startsWith("T"));
+  const recs = (await getDocs(collection(db, "records"))).docs.filter((d) => String(d.data().participant || "").startsWith("T"));
+  if (!confirm(`점검용 참가자 ${list.length}명과 그 기록 ${recs.length}개를 지울까요?`)) return;
+  for (const d of recs) await deleteDoc(d.ref);
+  for (const p of list) await deleteDoc(doc(db, "participants", p.token));
+  $("data-msg").textContent = `점검용 참가자 ${list.length}명과 기록 ${recs.length}개를 지웠어요.`;
+  await refresh();
 };
 $("b-clear-test").onclick = async () => {
   const snap = await getDocs(collection(db, "testRecords"));
