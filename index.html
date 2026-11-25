@@ -50,6 +50,7 @@
   .notice { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #fff3f2; color: var(--warn); font-size: 14px; }
 
   .scale { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 6px; }
+  .scale.five { grid-template-columns: repeat(5, 1fr); }
   .scale button, .choices button {
     padding: 13px 0; font-size: 17px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--fg);
   }
@@ -69,7 +70,7 @@
            border: 1px solid #1a1a1a; border-radius: 8px; padding: 6px 10px; font-size: 12px; }
 
   #probe { display: none; position: fixed; inset: 0; z-index: 10; padding: 24px 16px;
-           background: var(--flash-a); color: #111; animation: flash 1s steps(1) infinite; }
+           background: var(--flash-a); color: #111; animation: flash 1s steps(1) 2; }
   #probe.on { display: flex; flex-direction: column; justify-content: center; }
   @keyframes flash { 0% { background: var(--flash-a); } 50% { background: var(--flash-b); } }
   #probe .q { font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 18px; }
@@ -192,6 +193,9 @@
   <div class="choices two" data-key="post.usedPhone">
     <button data-v="no">아니요</button><button data-v="yes">예</button>
   </div>
+  <h2>화면 깜빡임 때문에 공부가 끊겼나요?</h2>
+  <div class="scale five" data-key="post.probeDisrupt" data-max="5"></div>
+  <div class="anchors"><span>전혀 아님</span><span>아주 많이</span></div>
   <div id="ear-q">
     <h2>이어폰이나 음악에 문제가 있었나요? (끊김, 광고, 배터리)</h2>
     <div class="choices two" data-key="post.earIssue">
@@ -246,7 +250,7 @@ import {
   initializeFirestore, persistentLocalCache, doc, getDoc, setDoc, updateDoc, arrayUnion, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const VERSION = "web-2026-11-23";
+const VERSION = "web-2026-11-25";
 const Q = new URLSearchParams(location.search);
 const DEBUG = Q.get("debug") === "1";
 const TEST = Q.get("test") === "1";
@@ -260,10 +264,13 @@ if (!PREVIEW) {
   db = initializeFirestore(app, { localCache: persistentLocalCache(), experimentalForceLongPolling: true });
 }
 
+// 질문 간격: 앞 10분(earlyMs)은 촘촘하게(gapMin~gapMax), 그 뒤는 듬성하게(lateGapMin~lateGapMax)
 const REAL = { warmMs: 3 * 60e3, restMs: 2 * 60e3, readyMs: 30e3, sessionMs: 20 * 60e3,
-               gapMin: 60e3, gapMax: 120e3, endBuffer: 15e3, timeout: 20e3, reasonTimeout: 15e3 };
+               earlyMs: 10 * 60e3, gapMin: 60e3, gapMax: 100e3, lateGapMin: 150e3, lateGapMax: 210e3,
+               endBuffer: 15e3, timeout: 20e3, reasonTimeout: 15e3 };
 const QUICK = { warmMs: 20e3, restMs: 20e3, readyMs: 10e3, sessionMs: 2 * 60e3,
-                gapMin: 15e3, gapMax: 30e3, endBuffer: 10e3, timeout: 20e3, reasonTimeout: 15e3 };
+                earlyMs: 60e3, gapMin: 15e3, gapMax: 25e3, lateGapMin: 35e3, lateGapMax: 50e3,
+                endBuffer: 10e3, timeout: 20e3, reasonTimeout: 15e3 };
 const cfg = Object.assign({}, TEST && !SHOT ? QUICK : REAL);
 
 const COND_TEXT = {
@@ -489,7 +496,13 @@ $("b-now").onclick = () => startStudy("button");
 
 function makeSchedule() {
   const out = []; let t = 0;
-  for (;;) { t += cfg.gapMin + Math.random() * (cfg.gapMax - cfg.gapMin); if (t > cfg.sessionMs - cfg.endBuffer) break; out.push(Math.round(t)); }
+  for (;;) {
+    const early = t < cfg.earlyMs;
+    const lo = early ? cfg.gapMin : cfg.lateGapMin, hi = early ? cfg.gapMax : cfg.lateGapMax;
+    t += lo + Math.random() * (hi - lo);
+    if (t > cfg.sessionMs - cfg.endBuffer) break;
+    out.push(Math.round(t));
+  }
   return out;
 }
 function startStudy(how) {
@@ -566,7 +579,7 @@ function endBlock(aborted) {
 // ---------- 끝 설문 ----------
 function buildScales() {
   document.querySelectorAll(".scale").forEach((box) => {
-    for (let v = 1; v <= 7; v++) { const b = document.createElement("button"); b.type = "button"; b.textContent = v; b.dataset.v = v; box.appendChild(b); }
+    for (let v = 1; v <= (Number(box.dataset.max) || 7); v++) { const b = document.createElement("button"); b.type = "button"; b.textContent = v; b.dataset.v = v; box.appendChild(b); }
   });
   document.querySelectorAll("#s-post .scale, #s-post .choices").forEach((box) => {
     box.addEventListener("click", (e) => {
@@ -582,7 +595,7 @@ function updatePost() {
   if (!rec) return;
   const p = rec.post, needEar = EAR.has(rec.meta.condition), needMusic = rec.meta.condition === "M";
   const musicOk = !needMusic || (p.lyrics && p.genre && p.playlistSent);
-  $("b-post").disabled = !(p.feltEntry && p.mood && p.arousal && p.usedPhone && (!needEar || p.earIssue) && musicOk && p.studyType && p.subject);
+  $("b-post").disabled = !(p.feltEntry && p.mood && p.arousal && p.usedPhone && (!needEar || p.earIssue) && musicOk && p.studyType && p.subject && p.probeDisrupt);
 }
 $("b-post").onclick = () => {
   rec.post.amount = $("f-amount").value.trim();
