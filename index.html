@@ -106,6 +106,9 @@
     <ul class="order" id="home-order"></ul>
     <ul class="todo">
       <li>방해금지(집중 모드)를 켜 주세요.</li>
+      <li id="home-ear-li">이어폰을 폰에 연결해 두세요. 쇼츠는 이어폰을 끼고 노이즈캔슬링과 소리를 켠 채 봐요.</li>
+      <li id="home-study-li">모든 블록에서 같은 과목을 같은 방식으로 공부해요. 블록마다 새 부분(새 단원, 새 문제)에서 시작해요.</li>
+      <li id="home-music-li">음악 블록용 플레이리스트를 미리 준비해 두세요. 20분 넘게 광고 없이 이어서 나오게 하고, 공부 중에는 곡을 넘기거나 고르지 않아요. 평소 공부할 때 듣는 음악, 공부할 때 안 듣는다면 평소 즐겨 듣는 음악이면 돼요.</li>
       <li id="home-warm-li"></li>
       <li>그다음은 화면이 알아서 안내해요. 공부 중에 화면이 밝게 깜빡이면 숫자 하나만 누르면 돼요. 블록이 끝날 때마다 짧은 설문이 있어요.</li>
     </ul>
@@ -264,9 +267,9 @@ const QUICK = { warmMs: 20e3, restMs: 20e3, readyMs: 10e3, sessionMs: 2 * 60e3,
 const cfg = Object.assign({}, TEST && !SHOT ? QUICK : REAL);
 
 const COND_TEXT = {
-  N: "이어폰 없이 공부해요. 이어폰은 빼서 가방에 넣어 주세요.",
-  C: "이어폰을 끼고 노이즈캔슬링을 켜 주세요. 소리는 틀지 않아요.",
-  M: "이어폰을 끼고 노이즈캔슬링을 켠 뒤, 평소 공부할 때 듣는 음악을 틀어 주세요.",
+  N: "쇼츠를 끄고, 이어폰을 빼서 가방에 넣어 주세요. 이어폰 없이 공부해요.",
+  C: "쇼츠를 끄고, 이어폰은 낀 채로 노이즈캔슬링을 켜 두세요. 소리는 틀지 않아요.",
+  M: "쇼츠를 끄고, 노이즈캔슬링을 켠 채 준비한 플레이리스트를 틀어 주세요. 공부 중에는 곡을 넘기거나 고르지 않아요.",
   R: "이어폰 없이 공부해요. 이어폰은 빼서 가방에 넣어 주세요."
 };
 const COND_SHORT = { N: "이어폰 없음", C: "노이즈캔슬링만, 소리 없음", M: "노이즈캔슬링 + 평소 듣는 음악", R: "이어폰 없음" };
@@ -417,8 +420,11 @@ function showHome() {
     : `공부 블록 ${plan.length}개를 이어서 해요. 블록마다 공부 전에 쇼츠 보는 시간이 있어요. 약 ${mins >= 60 ? Math.floor(mins / 60) + "시간 " + (mins % 60 ? (mins % 60) + "분" : "") : mins + "분"}.`;
   $("home-order").innerHTML = plan.map((b, i) => `<li><b>${pilot ? "블록" : (b.sessionNo || i + 1) + "블록"}</b><span>${COND_SHORT[b.condition] || ""}</span></li>`).join("");
   const rest = plan[0].condition === "R";
+  $("home-ear-li").hidden = rest;
+  $("home-study-li").hidden = pilot || (info.total || plan.length) <= 1;
+  $("home-music-li").hidden = !plan.some((b) => b.condition === "M");
   $("home-warm-li").textContent = rest ? "시작을 누르면 2분 동안 눈을 감고 쉬어요."
-    : `시작을 누르고 ${cfg.warmMs >= 60e3 ? Math.round(cfg.warmMs / 60e3) + "분" : Math.round(cfg.warmMs / 1000) + "초"} 동안 쇼츠를 보세요 (유튜브 쇼츠, 릴스, 틱톡 아무거나). 돌아올 시각은 화면에 나와요.`;
+    : `시작을 누르고 ${cfg.warmMs >= 60e3 ? Math.round(cfg.warmMs / 60e3) + "분" : Math.round(cfg.warmMs / 1000) + "초"} 동안 이어폰으로 쇼츠를 보세요 (유튜브 쇼츠, 릴스, 틱톡 아무거나). 돌아올 시각은 화면에 나와요.`;
   show("s-home");
 }
 
@@ -447,11 +453,11 @@ function beginBlock() {
   rec.times.warmStart = now();
   $("warm-tag").textContent = blockLabel();
   $("warm-title").textContent = rest ? "쉬는 시간" : "쇼츠 시간";
-  $("warm-text").textContent = rest ? "눈을 감고 편히 쉬세요." : "쇼츠를 보세요. 유튜브 쇼츠, 릴스, 틱톡 아무거나 괜찮아요. 메시지나 게임은 하지 않아요.";
+  $("warm-text").textContent = rest ? "눈을 감고 편히 쉬세요." : "이어폰을 끼고 노이즈캔슬링과 소리를 켠 채 쇼츠를 보세요. 유튜브 쇼츠, 릴스, 틱톡 아무거나 괜찮아요. 메시지나 게임은 하지 않아요.";
   const back = new Date(rec.times.warmStart + need);
   $("warm-clock").textContent = rest ? "" : `${back.getHours()}:${String(back.getMinutes()).padStart(2, "0")}까지`;
   $("warm-sub").textContent = rest ? "시간이 끝나면 연구자가 알려 줘요." : "이 페이지를 나가서 보면 돼요. 본 내용은 기록하지 않아요. 위 시각이 되면 이 페이지로 돌아오세요.";
-  $("warm-next").innerHTML = `<b>다음 공부:</b> ${COND_SHORT[b.condition] || ""}`;
+  $("warm-next").innerHTML = `<b>다음 공부:</b> ${COND_SHORT[b.condition] || ""}${b.condition === "M" ? "<br>플레이리스트를 바로 틀 수 있게 준비해 두세요." : ""}`;
   saveNote();
   startPhase("warm");
   show("s-warm");
